@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+
+import subprocess
+import re
+import time
+import datetime
+
+# get data from dmesg
+def get_dmesg_output():
+    try:
+        # Run the dmesg command and capture its output
+        dmesg_output = subprocess.check_output(["sudo", "dmesg"]).decode("utf-8")
+        return dmesg_output
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing dmesg command: {e}")
+        return None
+
+def get_server_boot_time():
+    with open('/proc/uptime', 'r') as uptime_file:
+        uptime_content = uptime_file.read().strip()
+
+    uptime_seconds = float(uptime_content.split()[0])
+    current_time = time.time()
+
+    boot_time = current_time - uptime_seconds
+    return boot_time
+
+
+def display_suppressed_lines(output,bootTime):
+    if output is None:
+        return
+
+    # Split the output into lines and filter lines containing "suppressed"
+    suppressed_lines = [line for line in output.split("\n") if "suppressed" in line]
+
+    if suppressed_lines:
+        for lines in suppressed_lines:
+            input_string = lines
+
+            # Regular expression pattern to extract the timestamp and the message
+            pattern = r"\[\s*([\d.]+)\s*\]\s*(.*)"
+
+            # Use re.search() to find the match in the input_string
+            match = re.search(pattern, lines)
+
+            if match:
+                finalTime = float(match.group(1).strip()) + bootTime
+                # Convert the timestamp to the desired format
+                timestamp = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(finalTime))
+                message = match.group(2).strip()
+
+                print(f'dmesg{{time="{timestamp}",message="{message}"}} 1')
+            else:
+                print("No match found.")
+
+if __name__ == "__main__":
+    dmesg_output = get_dmesg_output()
+    display_suppressed_lines(dmesg_output,get_server_boot_time())
+
